@@ -1,5 +1,6 @@
 package ru.shmygol.MySeconddTestAppSpringBoot.controller;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,13 +13,13 @@ import jakarta.validation.Valid;
 
 import ru.shmygol.MySeconddTestAppSpringBoot.exception.ValidationFailedException;
 import ru.shmygol.MySeconddTestAppSpringBoot.exception.UnsupportedCodeException;
-import ru.shmygol.MySeconddTestAppSpringBoot.model.Request;
-import ru.shmygol.MySeconddTestAppSpringBoot.model.Response;
+import ru.shmygol.MySeconddTestAppSpringBoot.model.*;
 import ru.shmygol.MySeconddTestAppSpringBoot.service.ValidationService;
+import ru.shmygol.MySeconddTestAppSpringBoot.util.DateTimeUtil;
 
-import java.text.SimpleDateFormat;
 import java.util.Date;
 
+@Slf4j
 @RestController
 public class MyController {
 
@@ -34,40 +35,48 @@ public class MyController {
             @Valid @RequestBody Request request,
             BindingResult bindingResult) {
 
-        SimpleDateFormat simpleDateFormat =
-                new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-
+        log.info("Получен request: {}", request);
         Response response = Response.builder()
                 .uid(request.getUid())
                 .operationUid(request.getOperationUid())
-                .systemTime(simpleDateFormat.format(new Date()))
-                .code("success")
-                .errorCode("")
-                .errorMessage("")
+                .systemTime(DateTimeUtil.getCustomFormat().format(new Date()))
+                .code(Codes.SUCCESS)
+                .errorCode(ErrorCodes.EMPTY)
+                .errorMessage(ErrorMessages.EMPTY)
                 .build();
+        log.info("Создан response: {}", response);
 
         try {
             validationService.isValid(bindingResult);
+            log.info("Проверка request завершена успешно: uid={}", request.getUid());
             if ("123".equals(request.getUid())) {
+                log.error("Не поддерживаемый uid в request: {}", request.getUid());
                 throw new UnsupportedCodeException("Не поддерживаемая ошибка");
             }
         } catch (ValidationFailedException e) {
-            response.setCode("failed");
-            response.setErrorCode("ValidationException");
-            response.setErrorMessage("Ошибка валидации");
+            log.error("Ошибка валидации request: {}", e.getMessage());
+            response.setCode(Codes.FAILED);
+            response.setErrorCode(ErrorCodes.VALIDATION_EXCEPTION);
+            response.setErrorMessage(ErrorMessages.VALIDATION);
+            log.info("Изменён response после ошибки валидации: {}", response);
             return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
         } catch (UnsupportedCodeException e) {
-            response.setCode("failed");
-            response.setErrorCode("UnsupportedCodeException");
-            response.setErrorMessage(e.getMessage());
+            log.error("Не поддерживаемый запрос: {}", e.getMessage());
+            response.setCode(Codes.FAILED);
+            response.setErrorCode(ErrorCodes.UNSUPPORTED_EXCEPTION);
+            response.setErrorMessage(ErrorMessages.UNSUPPORTED);
+            log.info("Изменён response после ошибки: {}", response);
             return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
         } catch (Exception e) {
-            response.setCode("failed");
-            response.setErrorCode("UnknownException");
-            response.setErrorMessage("Произошла непредвиденная ошибка");
+            log.error("Непредвиденная ошибка при обработке request", e);
+            response.setCode(Codes.FAILED);
+            response.setErrorCode(ErrorCodes.UNKNOWN_EXCEPTION);
+            response.setErrorMessage(ErrorMessages.UNKNOWN);
+            log.info("Изменён response после непредвиденной ошибки: {}", response);
             return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
+        log.info("Возвращён успешный response: {}", response);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 }
