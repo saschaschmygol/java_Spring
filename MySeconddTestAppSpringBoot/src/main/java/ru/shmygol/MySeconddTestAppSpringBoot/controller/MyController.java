@@ -2,6 +2,7 @@ package ru.shmygol.MySeconddTestAppSpringBoot.controller;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
@@ -14,6 +15,8 @@ import jakarta.validation.Valid;
 import ru.shmygol.MySeconddTestAppSpringBoot.exception.ValidationFailedException;
 import ru.shmygol.MySeconddTestAppSpringBoot.exception.UnsupportedCodeException;
 import ru.shmygol.MySeconddTestAppSpringBoot.model.*;
+import ru.shmygol.MySeconddTestAppSpringBoot.service.ModifyRequestService;
+import ru.shmygol.MySeconddTestAppSpringBoot.service.ModifyResponseService;
 import ru.shmygol.MySeconddTestAppSpringBoot.service.ValidationService;
 import ru.shmygol.MySeconddTestAppSpringBoot.util.DateTimeUtil;
 
@@ -24,10 +27,19 @@ import java.util.Date;
 public class MyController {
 
     private final ValidationService validationService;
+    private final ModifyResponseService modifyResponseService;
+    private final ModifyRequestService modifySystemNameRequestService;
+    private final ModifyRequestService modifySourceRequestService;
 
     @Autowired
-    public MyController(ValidationService validationService) {
+    public MyController(ValidationService validationService,
+                        @Qualifier("ModifySystemTimeResponseService") ModifyResponseService modifyResponseService,
+                        @Qualifier("ModifySystemNameRequestService") ModifyRequestService modifySystemNameRequestService,
+                        @Qualifier("ModifySourceRequestService") ModifyRequestService modifySourceRequestService) {
         this.validationService = validationService;
+        this.modifySystemNameRequestService = modifySystemNameRequestService;
+        this.modifyResponseService = modifyResponseService;
+        this.modifySourceRequestService = modifySourceRequestService;
     }
 
     @PostMapping(value = "/feedback")
@@ -35,6 +47,7 @@ public class MyController {
             @Valid @RequestBody Request request,
             BindingResult bindingResult) {
 
+        request.setService1ReceivedAtMillis(System.currentTimeMillis());
         log.info("Получен request: {}", request);
         Response response = Response.builder()
                 .uid(request.getUid())
@@ -77,6 +90,10 @@ public class MyController {
         }
 
         log.info("Возвращён успешный response: {}", response);
+
+        modifyResponseService.modify(response);
+        modifySystemNameRequestService.modify(request);
+        modifySourceRequestService.modify(request);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 }

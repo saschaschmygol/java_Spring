@@ -32,6 +32,7 @@ public class Request {
     private Integer templateId;
     private Integer productCode;
     private Integer smsCode;
+    private Long service1ReceivedAtMillis;
 
     @Override
     public String toString() {
