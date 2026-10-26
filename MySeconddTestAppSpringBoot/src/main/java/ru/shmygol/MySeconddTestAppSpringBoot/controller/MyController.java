@@ -1,7 +1,6 @@
 package ru.shmygol.MySeconddTestAppSpringBoot.controller;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +14,7 @@ import jakarta.validation.Valid;
 import ru.shmygol.MySeconddTestAppSpringBoot.exception.ValidationFailedException;
 import ru.shmygol.MySeconddTestAppSpringBoot.exception.UnsupportedCodeException;
 import ru.shmygol.MySeconddTestAppSpringBoot.model.*;
+import ru.shmygol.MySeconddTestAppSpringBoot.service.AnnualBonusService;
 import ru.shmygol.MySeconddTestAppSpringBoot.service.ModifyRequestService;
 import ru.shmygol.MySeconddTestAppSpringBoot.service.ModifyResponseService;
 import ru.shmygol.MySeconddTestAppSpringBoot.service.ValidationService;
@@ -30,16 +30,18 @@ public class MyController {
     private final ModifyResponseService modifyResponseService;
     private final ModifyRequestService modifySystemNameRequestService;
     private final ModifyRequestService modifySourceRequestService;
+    private final AnnualBonusService annualBonusService;
 
-    @Autowired
     public MyController(ValidationService validationService,
                         @Qualifier("ModifySystemTimeResponseService") ModifyResponseService modifyResponseService,
                         @Qualifier("ModifySystemNameRequestService") ModifyRequestService modifySystemNameRequestService,
-                        @Qualifier("ModifySourceRequestService") ModifyRequestService modifySourceRequestService) {
+                        @Qualifier("ModifySourceRequestService") ModifyRequestService modifySourceRequestService,
+                        AnnualBonusService annualBonusService) {
         this.validationService = validationService;
-        this.modifySystemNameRequestService = modifySystemNameRequestService;
         this.modifyResponseService = modifyResponseService;
+        this.modifySystemNameRequestService = modifySystemNameRequestService;
         this.modifySourceRequestService = modifySourceRequestService;
+        this.annualBonusService = annualBonusService;
     }
 
     @PostMapping(value = "/feedback")
@@ -57,43 +59,44 @@ public class MyController {
                 .errorCode(ErrorCodes.EMPTY)
                 .errorMessage(ErrorMessages.EMPTY)
                 .build();
-        log.info("Создан response: {}", response);
 
         try {
             validationService.isValid(bindingResult);
-            log.info("Проверка request завершена успешно: uid={}", request.getUid());
             if ("123".equals(request.getUid())) {
-                log.error("Не поддерживаемый uid в request: {}", request.getUid());
                 throw new UnsupportedCodeException("Не поддерживаемая ошибка");
             }
+            response.setAnnualBonus(annualBonusService.calculate(
+                    request.getPosition(),
+                    request.getSalary(),
+                    request.getBonus(),
+                    request.getWorkDays()));
         } catch (ValidationFailedException e) {
             log.error("Ошибка валидации request: {}", e.getMessage());
-            response.setCode(Codes.FAILED);
-            response.setErrorCode(ErrorCodes.VALIDATION_EXCEPTION);
-            response.setErrorMessage(ErrorMessages.VALIDATION);
-            log.info("Изменён response после ошибки валидации: {}", response);
-            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+            return errorResponse(response, ErrorCodes.VALIDATION_EXCEPTION,
+                    ErrorMessages.VALIDATION, HttpStatus.BAD_REQUEST);
         } catch (UnsupportedCodeException e) {
             log.error("Не поддерживаемый запрос: {}", e.getMessage());
-            response.setCode(Codes.FAILED);
-            response.setErrorCode(ErrorCodes.UNSUPPORTED_EXCEPTION);
-            response.setErrorMessage(ErrorMessages.UNSUPPORTED);
-            log.info("Изменён response после ошибки: {}", response);
-            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+            return errorResponse(response, ErrorCodes.UNSUPPORTED_EXCEPTION,
+                    ErrorMessages.UNSUPPORTED, HttpStatus.BAD_REQUEST);
         } catch (Exception e) {
             log.error("Непредвиденная ошибка при обработке request", e);
-            response.setCode(Codes.FAILED);
-            response.setErrorCode(ErrorCodes.UNKNOWN_EXCEPTION);
-            response.setErrorMessage(ErrorMessages.UNKNOWN);
-            log.info("Изменён response после непредвиденной ошибки: {}", response);
-            return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+            return errorResponse(response, ErrorCodes.UNKNOWN_EXCEPTION,
+                    ErrorMessages.UNKNOWN, HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
-        log.info("Возвращён успешный response: {}", response);
+//        modifyResponseService.modify(response);
+//        modifySystemNameRequestService.modify(request);
+//        modifySourceRequestService.modify(request);
 
-        modifyResponseService.modify(response);
-        modifySystemNameRequestService.modify(request);
-        modifySourceRequestService.modify(request);
-        return new ResponseEntity<>(response, HttpStatus.OK);
+        log.info("Возвращён успешный response: {}", response);
+        return ResponseEntity.ok(response);
+    }
+
+    private ResponseEntity<Response> errorResponse(Response response, ErrorCodes errorCode,
+                                                   ErrorMessages errorMessage, HttpStatus status) {
+        response.setCode(Codes.FAILED);
+        response.setErrorCode(errorCode);
+        response.setErrorMessage(errorMessage);
+        return ResponseEntity.status(status).body(response);
     }
 }
